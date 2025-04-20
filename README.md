@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # FundSol - Solana Fundraising Platform
 
 FundSol is a GoFundMe-style fundraising platform built on Solana, leveraging Solana's fast and low-cost transactions to create an efficient crowdfunding experience.
@@ -114,3 +115,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Turso](https://turso.tech/)
 - [shadcn/ui](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
+=======
+# fundsol
+>>>>>>> f8117e2b2f0cf13baa6f664d46f1d4beccc74983
