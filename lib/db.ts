@@ -1,4 +1,4 @@
-import { createClient, type Value } from '@libsql/client';
+import { createClient, type Value, LibsqlError, Transaction } from '@libsql/client';
 import { runMigrations } from './db-migrations';
 
 // Connection configuration with better error handling
@@ -126,6 +126,30 @@ export async function verifyDatabase() {
   }
 }
 
+/**
+ * Executes a database query with a retry mechanism.
+ *
+ * WARNING: This function currently retries on ANY error encountered during query execution.
+ * This can be problematic for non-transient errors (e.g., unique constraint violations,
+ * SQL syntax errors, data validation errors from triggers) as retrying them will not
+ * lead to success and may obscure the original issue or cause unintended side effects.
+ *
+ * RECOMMENDATION:
+ * For production use, this function should be enhanced to:
+ * 1. Identify specific, transient error codes or types that are safe to retry
+ *    (e.g., network connection issues, temporary server unavailability, lock timeouts).
+ *    Consult Turso/libSQL documentation for such error codes.
+ * 2. Only retry when one of those specific transient errors is caught.
+ *
+ * USAGE GUIDANCE (Current State):
+ * Until refined, use this function judiciously. It is best suited for operations where:
+ * - Transient errors are a known concern.
+ * - The operation is idempotent (retrying multiple times has the same effect as one successful attempt).
+ * - Or, where the consequences of retrying a non-transient error are well understood and acceptable.
+ *
+ * Consider if the underlying @libsql/client offers any built-in retry strategies for
+ * specific scenarios (like connection establishment) that might be leveraged or preferred.
+ */
 // Helper function to execute database queries with retry logic
 export async function executeWithRetry(sql: string, args?: Value[], maxRetries = 3) {
   let lastError;
@@ -145,4 +169,27 @@ export async function executeWithRetry(sql: string, args?: Value[], maxRetries =
   }
   
   throw lastError;
-} 
+}
+
+export async function executeInTransaction<T>(
+  callback: (tx: Transaction) => Promise<T>
+): Promise<T> {
+  const tx = await db.transaction();
+  try {
+    const result = await callback(tx);
+    await tx.commit();
+    return result;
+  } catch (error) {
+    // Check if it's an error where rollback is possible/needed
+    if (tx && typeof tx.rollback === 'function') {
+      try {
+        await tx.rollback();
+      } catch (rollbackError) {
+        console.error('Failed to rollback transaction:', rollbackError);
+        // Potentially throw a combined error or the original error
+      }
+    }
+    console.error('Transaction error:', error);
+    throw error; // Re-throw the original error after attempting rollback
+  }
+}

@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, verifyDatabase } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import { userCreationSchema } from '@/lib/validations';
 
 export async function POST(request: NextRequest) {
   try {
+    await verifyDatabase(); // Ensure database is ready
     const body = await request.json();
-    const { wallet_address } = body;
+    
+    // Validate request body using Zod schema
+    const validationResult = userCreationSchema.safeParse(body);
 
-    if (!wallet_address) {
-      return NextResponse.json(
-        { success: false, message: 'Wallet address is required' },
-        { status: 400 }
-      );
+    if (!validationResult.success) {
+      // Log the detailed validation errors to the server console
+      console.error("User validation error:", validationResult.error.flatten().fieldErrors);
+      
+      return NextResponse.json({
+        success: false,
+        message: "Invalid user data. Please check your inputs and try again."
+        // Optionally, include an error code for client-side handling:
+        // error_code: "VALIDATION_ERROR" 
+      }, { status: 400 });
     }
+
+    // Use validated data
+    const { wallet_address } = validationResult.data;
 
     // Check if user already exists
     const existingUser = await db.execute({
@@ -56,10 +68,13 @@ export async function POST(request: NextRequest) {
       }, { status: 201 });
     }
   } catch (error) {
-    console.error('Error creating/updating user:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to create/update user', error: String(error) },
-      { status: 500 }
-    );
+    console.error('Error creating/updating user:', error); // Log the full error object
+    
+    // For any unexpected errors, return a generic message
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to process user request due to an internal error.'
+      // error_code: "INTERNAL_SERVER_ERROR"
+    }, { status: 500 });
   }
-} 
+}

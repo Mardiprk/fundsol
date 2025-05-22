@@ -1,12 +1,38 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
-// Simple in-memory rate limiter
-// NOTE: For production, use a Redis-based rate limiter instead of this in-memory solution
-const ipRequestCounts = new Map<string, { count: number, resetTime: number }>();
-const RATE_LIMIT_RESET_TIME = 60 * 1000; // 1 minute in milliseconds
-const MAX_REQUESTS_PER_MINUTE = 100; // General rate limit
-const MAX_WRITE_REQUESTS_PER_MINUTE = 10; // Stricter limit for POST/PUT/DELETE
+// =====================================================================================
+// !! DEVELOPMENT ONLY RATE LIMITER !!
+// =====================================================================================
+// The rate limiting logic below is a simple in-memory solution intended for
+// development and demonstration purposes only. IT IS NOT SUITABLE FOR PRODUCTION USE.
+//
+// Reasons:
+// 1. Not Scalable: In a distributed environment (multiple server instances), each
+//    instance would have its own independent rate limits, rendering the limits ineffective.
+// 2. Data Volatility: Rate limiting data is lost if the server restarts.
+// 3. Basic: Lacks advanced features needed for robust production protection.
+//
+// TODO: For production, replace this with a persistent, distributed rate limiting
+// solution using a service like Redis, or a dedicated API gateway / rate-limiting service.
+// Search for "production rate limiter nodejs redis" for common patterns.
+// =====================================================================================
+
+// Simple in-memory rate limiter. Stores IP addresses and their request counts.
+const ipRequestCounts = new Map<string, { 
+  count: number, // Number of requests from this IP within the current window
+  resetTime: number // Timestamp (in ms) when the count for this IP should reset
+}>();
+
+// Time window for rate limiting in milliseconds (e.g., 60 * 1000 = 1 minute).
+const RATE_LIMIT_RESET_TIME = 60 * 1000; 
+
+// Maximum number of general requests allowed per IP within the RATE_LIMIT_RESET_TIME window.
+const MAX_REQUESTS_PER_MINUTE = 100; 
+
+// Stricter maximum number of write requests (POST, PUT, DELETE, PATCH) allowed per IP 
+// within the RATE_LIMIT_RESET_TIME window.
+const MAX_WRITE_REQUESTS_PER_MINUTE = 10; 
 
 export default function middleware(request: NextRequest) {
   const response = NextResponse.next();

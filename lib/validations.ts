@@ -82,6 +82,31 @@ export const userSchema = z.object({
 
 export type UserFormValues = z.infer<typeof userSchema>;
 
+// Schema for creating a new user - primarily for validating wallet address
+export const userCreationSchema = z.object({
+  wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, {
+    message: "Invalid Solana wallet address format. It should be a Base58 encoded string between 32 and 44 characters."
+  }),
+});
+
+export type UserCreationFormValues = z.infer<typeof userCreationSchema>;
+
+// Schema for creating a new donation
+export const donationSchema = z.object({
+  id: z.string().uuid({ message: "Invalid donation ID format. Must be a UUID." }),
+  campaign_id: z.string().uuid({ message: "Invalid campaign ID format. Must be a UUID." }),
+  wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, {
+    message: "Invalid Solana wallet address format. It should be a Base58 encoded string between 32 and 44 characters."
+  }),
+  amount: z.coerce.number().positive({ message: "Donation amount must be a positive number." }),
+  transaction_signature: z.string().min(1, { message: "Transaction signature is required." })
+    .regex(/^[1-9A-HJ-NP-Za-km-z]{64,88}$/, { // Common length for Solana signatures, might need adjustment
+      message: "Invalid transaction signature format. It should be a Base58 encoded string, typically 64-88 characters."
+    }),
+});
+
+export type DonationFormValues = z.infer<typeof donationSchema>;
+
 export const campaignCategories = [
   { label: 'Medical', value: 'medical' },
   { label: 'Emergency', value: 'emergency' },
