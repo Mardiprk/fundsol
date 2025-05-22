@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # FundSol - Solana Fundraising Platform
 
 FundSol is a GoFundMe-style fundraising platform built on Solana, leveraging Solana's fast and low-cost transactions to create an efficient crowdfunding experience.
