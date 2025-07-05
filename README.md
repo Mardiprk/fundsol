@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/favicon.ico" alt="FundSol Logo" width="64" />
+  <img src="app/favicon.ico" alt="FundSol Logo" width="64" />
 </p>
 
 # FundSol - Solana Fundraising Platform
