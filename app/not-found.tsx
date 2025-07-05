@@ -76,7 +76,7 @@ export default function NotFound() {
           <div className="space-y-4">
             <Link href="/">
               <Button className="w-full bg-[#b5f265] hover:bg-[#a3e156] text-black font-medium h-12 text-base shadow-lg shadow-[#b5f265]/30 group transition-all duration-300">
-                Return to Home
+                Return to Homepage
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1.5" />
               </Button>
             </Link>

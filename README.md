@@ -1,58 +1,61 @@
 # FundSol - Solana Fundraising Platform
 
-FundSol is a GoFundMe-style fundraising platform built on Solana, leveraging Solana's fast and low-cost transactions to create an efficient crowdfunding experience.
+FundSol is a GoFundMe-style fundraising platform built on Solana, leveraging Solana's fast and low-cost transactions to create an efficient, transparent, and decentralized crowdfunding experience.
 
-## Features
+---
 
-- 🔐 Secure wallet connection using Solana wallets
-- 💰 Create and manage fundraising campaigns
-- 📊 Track campaign donations and progress
-- 🔍 Browse campaigns by category
-- 📝 Rich content support with Markdown for campaign descriptions
-- 🌐 Custom campaign URLs with slugs
-- 🤝 Easy donation process using Solana 
+## ✨ Features
 
-## Tech Stack
+- 🔐 **Secure wallet connection** using Solana wallets
+- 💰 **Create and manage fundraising campaigns**
+- 📊 **Track campaign donations and progress**
+- 🔍 **Browse campaigns by category**
+- 📝 **Rich content support** with Markdown for campaign descriptions
+- 🌐 **Custom campaign URLs** with slugs
+- 🤝 **Easy donation process** using Solana
 
-- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Database**: Turso (libsql)
-- **Blockchain**: Solana Web3.js
-- **Form Handling**: React Hook Form + Zod validation
-- **Content Rendering**: React Markdown
+---
 
-## Getting Started
+## 🛠️ Tech Stack
+
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS
+- **UI Components:** shadcn/ui
+- **Database:** Turso (libsql)
+- **Blockchain:** Solana Web3.js
+- **Form Handling:** React Hook Form + Zod validation
+- **Content Rendering:** React Markdown
+
+---
+
+## 🏁 Getting Started
 
 ### Prerequisites
-
 - Node.js 18+ and npm
 - Solana wallet (Phantom, Backpack, etc.)
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/fundsol.git
-   cd fundsol
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Run the development server:
 ```bash
-npm run dev
-   ```
+# 1. Clone the repository
+$ git clone https://github.com/yourusername/fundsol.git
+$ cd fundsol
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+# 2. Install dependencies
+$ npm install
 
-5. Initialize the database by visiting [http://localhost:3000/api/init](http://localhost:3000/api/init) once.
-
-## Project Structure
-
+# 3. Run the development server
+$ npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+**Initialize the database** by visiting [http://localhost:3000/api/init](http://localhost:3000/api/init) once.
+
+---
+
+## 📁 Project Structure
+
+```text
 fundsol/
 ├── app/                    # Next.js app directory
 │   ├── api/                # API routes
@@ -75,7 +78,9 @@ fundsol/
 └── public/                 # Static files
 ```
 
-## Database Schema
+---
+
+## 🗄️ Database Schema
 
 The application uses three main tables:
 
@@ -83,7 +88,9 @@ The application uses three main tables:
 2. **donations** - Records donations made to campaigns
 3. **users** - Stores user information linked to wallet addresses
 
-## Roadmap
+---
+
+## 🛣️ Roadmap
 
 - [ ] Integration with Solana wallet adapters
 - [ ] Real-time donation processing
@@ -93,7 +100,9 @@ The application uses three main tables:
 - [ ] Social sharing
 - [ ] Campaign verification badges
 
-## Contributing
+---
+
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -103,17 +112,19 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+---
+
+## 🙏 Acknowledgments
 
 - [Next.js](https://nextjs.org/)
 - [Solana](https://solana.com/)
 - [Turso](https://turso.tech/)
 - [shadcn/ui](https://ui.shadcn.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
-=======
-# fundsol
->>>>>>> f8117e2b2f0cf13baa6f664d46f1d4beccc74983
+

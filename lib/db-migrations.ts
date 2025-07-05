@@ -23,9 +23,6 @@ export async function runMigrations() {
     // Migration 3: Add matching columns to campaigns table
     await addMatchingColumnsToCampaigns();
     
-    // Migration 4: Create indexes for performance optimization
-    await createPerformanceIndexes();
-    
     console.log('All migrations completed successfully');
   } catch (error) {
     console.error('Error running migrations:', error);
@@ -121,69 +118,6 @@ async function addMatchingColumnsToCampaigns() {
     }
   } catch (error) {
     console.error('Error adding matching columns to campaigns table:', error);
-    throw error;
-  }
-}
-
-async function createPerformanceIndexes() {
-  try {
-    console.log('Creating performance indexes...');
-    
-    // Check existing indexes to avoid duplicates
-    const indexesResult = await db.execute({
-      sql: "SELECT name FROM sqlite_master WHERE type='index'"
-    });
-    
-    const existingIndexes = indexesResult.rows.map(row => String(row.name));
-    
-    // Create indexes only if they don't exist
-    const indexesToCreate = [
-      {
-        name: 'idx_campaigns_slug',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_campaigns_slug ON campaigns(slug)'
-      },
-      {
-        name: 'idx_campaigns_wallet_address',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_campaigns_wallet_address ON campaigns(wallet_address)'
-      },
-      {
-        name: 'idx_campaigns_category',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_campaigns_category ON campaigns(category)'
-      },
-      {
-        name: 'idx_campaigns_created_at',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns(created_at)'
-      },
-      {
-        name: 'idx_campaigns_end_date',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_campaigns_end_date ON campaigns(end_date)'
-      },
-      {
-        name: 'idx_donations_campaign_id',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_donations_campaign_id ON donations(campaign_id)'
-      },
-      {
-        name: 'idx_donations_donor_id',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_donations_donor_id ON donations(donor_id)'
-      },
-      {
-        name: 'idx_users_wallet_address',
-        sql: 'CREATE INDEX IF NOT EXISTS idx_users_wallet_address ON users(wallet_address)'
-      }
-    ];
-    
-    for (const index of indexesToCreate) {
-      if (!existingIndexes.includes(index.name)) {
-        console.log(`Creating index: ${index.name}`);
-        await db.execute({ sql: index.sql });
-      } else {
-        console.log(`Index ${index.name} already exists`);
-      }
-    }
-    
-    console.log('Performance indexes created successfully');
-  } catch (error) {
-    console.error('Error creating performance indexes:', error);
     throw error;
   }
 } 

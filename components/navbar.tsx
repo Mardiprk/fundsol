@@ -64,7 +64,7 @@ export function Navbar() {
                 pathname === "/campaigns" ? "text-foreground" : "text-muted-foreground"
               )}
             >
-              Explore
+              Campaigns
             </Link>
             <Link 
               href="/create" 

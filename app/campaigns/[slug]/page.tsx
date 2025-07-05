@@ -8,8 +8,6 @@ import { YouTubeEmbed } from '@/components/youtube-embed';
 import { isYouTubeUrl } from '@/lib/utils';
 import MDEditor from '@uiw/react-md-editor';
 import { ShareButtons } from '@/components/share-buttons';
-import { getCampaigns, getCampaignDonationsSummary } from '@/lib/db-utils';
-import { campaignCache } from '@/lib/cache';
 
 interface Creator {
   id: string;
@@ -42,6 +40,10 @@ interface Campaign {
   creator: Creator;
 }
 
+// Create a simple cache for campaigns
+const campaignCache = new Map<string, {data: Campaign, timestamp: number}>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 export default function CampaignPage() {
   const params = useParams<{ slug: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -69,28 +71,61 @@ export default function CampaignPage() {
     return endDate < new Date();
   }, [campaign]);
 
-  // Memoize the fetch campaign function with improved caching
+  // Memoize the fetch campaign function
   const fetchCampaign = useCallback(async (slug: string) => {
     try {
       setIsLoading(true);
       
-      // Use optimized campaign fetcher with built-in caching
-      const campaigns = await getCampaigns({ 
-        slug,
-        includeDonations: true,
-        includeCreator: true
-      });
+      // Check cache first
+      const now = Date.now();
+      const cachedData = campaignCache.get(slug);
       
-      if (!campaigns || (Array.isArray(campaigns) && campaigns.length === 0)) {
+      if (cachedData && (now - cachedData.timestamp < CACHE_DURATION)) {
+        // Use cached data if it's still valid
+        const campaignData = cachedData.data;
+        setCampaign(campaignData);
+        setTotalRaised(campaignData.total_raised);
+        setDonationCount(campaignData.donation_count);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Fetch from the correct API endpoint: /api/campaigns/[slug]
+      const response = await fetch(`/api/campaigns/${slug}`);
+      
+      if (!response.ok) {
+        // Log more details about the failed response
+        let errorBody = 'Could not read error body';
+        try {
+          errorBody = await response.text(); // Try to read response text
+        } catch (e) {}
+        console.error(`API Error: Status ${response.status}, Body: ${errorBody}`);
+        throw new Error('Failed to fetch campaign');
+      }
+      
+      const data = await response.json();
+      
+      // The [slug] route returns the campaign directly, not nested in 'campaigns' array
+      if (!data.success || !data.campaign) {
         throw new Error('Campaign not found');
       }
       
-      // Fix the type issue by properly typing the campaigns array
-      const campaignData = Array.isArray(campaigns) ? campaigns[0] : campaigns as Campaign;
+      const campaignData = data.campaign;
+      
+      // Convert numeric values
+      campaignData.goal_amount = Number(campaignData.goal_amount);
+      campaignData.total_raised = Number(campaignData.total_raised);
+      campaignData.donation_count = Number(campaignData.donation_count);
+      
+      // Cache the result
+      campaignCache.set(slug, {
+        data: campaignData,
+        timestamp: now
+      });
       
       setCampaign(campaignData);
-      setTotalRaised(campaignData.total_raised || 0);
-      setDonationCount(campaignData.donation_count || 0);
+      setTotalRaised(campaignData.total_raised);
+      setDonationCount(campaignData.donation_count);
     } catch (error) {
       console.error('Error fetching campaign:', error);
     } finally {
@@ -116,13 +151,19 @@ export default function CampaignPage() {
     setTotalRaised(prevTotal => prevTotal + amount);
     setDonationCount(prevCount => prevCount + 1);
     
-    // Update cache with new donation information
-    if (params.slug) {
-      // Clear specific cache entries to ensure data consistency
-      const donationCacheKey = `donations:summary:${campaign.id}`;
-      campaignCache.getKeys()
-        .filter(key => key.includes(params.slug) || key.includes(campaign.id))
-        .forEach(key => campaignCache.delete(key));
+    // Update cache with new values
+    const cachedCampaign = campaignCache.get(params.slug as string);
+    if (cachedCampaign) {
+      const updatedCampaign = {
+        ...cachedCampaign.data,
+        total_raised: cachedCampaign.data.total_raised + amount,
+        donation_count: cachedCampaign.data.donation_count + 1
+      };
+      
+      campaignCache.set(params.slug as string, {
+        data: updatedCampaign,
+        timestamp: cachedCampaign.timestamp
+      });
     }
   }, [campaign, params.slug]);
 

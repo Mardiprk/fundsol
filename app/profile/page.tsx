@@ -271,19 +271,10 @@ export default function ProfilePage() {
         const campaignsData = await campaignsRes.json();
         if (campaignsData.success) {
           // Ensure proper type conversion for numeric fields
-          const formattedCampaigns = campaignsData.campaigns.map((campaign: {
-            id: string;
-            title: string;
-            summary: string;
-            description: string;
+          const formattedCampaigns = campaignsData.campaigns.map((campaign: Omit<Campaign, 'goalAmount' | 'donation_count' | 'total_raised'> & {
             goal_amount: string | number;
-            slug: string;
-            category: string;
-            end_date: string;
-            image_url: string | null;
             donation_count: string | number;
             total_raised: string | number;
-            wallet_address: string;
           }) => ({
             ...campaign,
             goalAmount: Number(campaign.goal_amount),
@@ -383,7 +374,18 @@ export default function ProfilePage() {
   const handleDeleteCampaign = async (campaignId: string) => {
     try {
       setIsDeleting(true);
-      const response = await fetch(`/api/campaigns?id=${campaignId}`, {
+      // Ensure publicKey is available before making the request
+      if (!publicKey) {
+        toast({
+          title: "Error",
+          description: "Wallet not connected",
+          variant: "destructive",
+        });
+        setIsDeleting(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/campaigns?id=${campaignId}&wallet=${publicKey.toString()}`, {
         method: 'DELETE',
       });
 

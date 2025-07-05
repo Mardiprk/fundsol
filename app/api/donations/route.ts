@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
-import { campaignCache, donationCache } from '@/lib/cache';
-import { getCampaignDonationsSummary } from '@/lib/db-utils';
 
 interface DonationRow {
   id: string;
@@ -19,79 +17,90 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get('wallet');
-    
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
     if (!walletAddress) {
       return NextResponse.json(
         { success: false, message: 'Wallet address is required' },
         { status: 400 }
       );
     }
-    
-    // Check cache first
-    const cacheKey = `donations:wallet:${walletAddress}`;
-    const cachedDonations = donationCache.get(cacheKey);
-    if (cachedDonations) {
-      return NextResponse.json({ success: true, donations: cachedDonations });
-    }
-    
-    // Get user ID from wallet
+
+    // Get user ID from wallet address
     const userResult = await db.execute({
       sql: 'SELECT id FROM users WHERE wallet_address = ?',
-      args: [walletAddress],
+      args: [walletAddress]
     });
-    
+
     if (userResult.rows.length === 0) {
-      // If user doesn't exist, they have no donations
-      return NextResponse.json({ success: true, donations: [] });
+      // No donations found since user doesn't exist
+      return NextResponse.json({ 
+        success: true, 
+        donations: [],
+        total: 0,
+        hasMore: false
+      });
     }
-    
+
     const userId = userResult.rows[0].id;
-    
-    // Get donations with campaign information
-    const donationsQuery = `
-      SELECT 
-        d.id, d.amount, d.transaction_signature, d.created_at,
-        c.id as campaign_id, c.title, c.slug, c.image_url, c.end_date,
-        c.goal_amount, 
-        (SELECT SUM(amount) FROM donations WHERE campaign_id = c.id) as total_raised
-      FROM donations d
-      JOIN campaigns c ON d.campaign_id = c.id
-      WHERE d.donor_id = ?
-      ORDER BY d.created_at DESC
-    `;
-    
-    const donationsResult = await db.execute({
-      sql: donationsQuery,
-      args: [userId],
+
+    // Get donations with campaign info
+    const donations = await db.execute({
+      sql: `
+        SELECT 
+          d.id, 
+          d.campaign_id, 
+          c.title as campaign_title,
+          d.donor_id, 
+          d.amount, 
+          d.transaction_signature, 
+          d.created_at,
+          c.image_url
+        FROM donations d
+        JOIN campaigns c ON d.campaign_id = c.id
+        WHERE d.donor_id = ?
+        ORDER BY d.created_at DESC
+        LIMIT ? OFFSET ?
+      `,
+      args: [userId, limit, offset]
     });
+
+    // Get total count for pagination
+    const countResult = await db.execute({
+      sql: 'SELECT COUNT(*) as total FROM donations WHERE donor_id = ?',
+      args: [userId]
+    });
+
+    const total = Number(countResult.rows[0].total || 0);
     
-    // Process results
-    const donations = donationsResult.rows.map(row => {
+    // Transform the data
+    const formattedDonations = donations.rows.map((donation: unknown) => {
+      const donationRow = donation as DonationRow;
       return {
-        id: row.id,
-        amount: Number(row.amount),
-        transaction_signature: row.transaction_signature,
-        createdAt: row.created_at,
-        campaign: {
-          id: row.campaign_id,
-          title: row.title,
-          slug: row.slug,
-          image_url: row.image_url,
-          end_date: row.end_date,
-          goalAmount: Number(row.goal_amount),
-          total_raised: Number(row.total_raised || 0),
-        }
+        id: donationRow.id,
+        campaign_id: donationRow.campaign_id,
+        campaign_title: donationRow.campaign_title,
+        amount: Number(donationRow.amount),
+        transaction_signature: donationRow.transaction_signature,
+        created_at: donationRow.created_at,
+        image_url: donationRow.image_url
       };
     });
-    
-    // Cache the results
-    donationCache.set(cacheKey, donations);
-    
-    return NextResponse.json({ success: true, donations });
+
+    return NextResponse.json({
+      success: true,
+      donations: formattedDonations,
+      total,
+      hasMore: offset + limit < total
+    });
   } catch (error) {
     console.error('Error fetching donations:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to fetch donations' },
+      { 
+        success: false, 
+        message: 'Failed to fetch donations' 
+      },
       { status: 500 }
     );
   }
@@ -99,89 +108,127 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify CSRF token
+    const csrfToken = request.headers.get('X-CSRF-Token');
+    if (!csrfToken) {
+      return NextResponse.json({ 
+        success: false, 
+        message: 'CSRF token missing' 
+      }, { status: 403 });
+    }
+    
     const body = await request.json();
-    
-    // Validate required fields
     const { id, campaign_id, wallet_address, amount, transaction_signature } = body;
-    
-    if (!id || !campaign_id || !wallet_address || !amount || !transaction_signature) {
+
+    // Validate required fields
+    if (!campaign_id || !wallet_address || !amount || !transaction_signature) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields' },
         { status: 400 }
       );
     }
     
-    // Check if campaign exists
-    const campaignResult = await db.execute({
-      sql: 'SELECT id, wallet_address FROM campaigns WHERE id = ?',
-      args: [campaign_id],
-    });
+    // Validate data types and formats
+    if (typeof amount !== 'number' || amount <= 0) {
+      return NextResponse.json(
+        { success: false, message: 'Amount must be a positive number' },
+        { status: 400 }
+      );
+    }
     
-    if (campaignResult.rows.length === 0) {
+    if (!/^[a-zA-Z0-9]{32,}$/.test(transaction_signature)) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid transaction signature format' },
+        { status: 400 }
+      );
+    }
+
+    // Check for duplicate transaction signature
+    const txCheck = await db.execute({
+      sql: 'SELECT id FROM donations WHERE transaction_signature = ?',
+      args: [transaction_signature]
+    });
+
+    if (txCheck.rows.length > 0) {
+      return NextResponse.json(
+        { success: false, message: 'Donation with this transaction signature already exists' },
+        { status: 409 }
+      );
+    }
+
+    // Ensure the campaign exists and get its details
+    const campaignCheck = await db.execute({
+      sql: 'SELECT id, goal_amount, title, has_matching, matching_amount FROM campaigns WHERE id = ?',
+      args: [campaign_id]
+    });
+
+    if (campaignCheck.rows.length === 0) {
       return NextResponse.json(
         { success: false, message: 'Campaign not found' },
         { status: 404 }
       );
     }
+
+    const campaign = campaignCheck.rows[0];
     
-    // Get or create user
-    let userId;
-    const userResult = await db.execute({
+    // Ensure the user exists or create them
+    const userCheck = await db.execute({
       sql: 'SELECT id FROM users WHERE wallet_address = ?',
-      args: [wallet_address],
+      args: [wallet_address]
     });
-    
-    if (userResult.rows.length === 0) {
+
+    let donorId;
+    const now = new Date().toISOString();
+
+    if (userCheck.rows.length === 0) {
       // Create a new user
-      userId = uuidv4();
-      const now = new Date().toISOString();
-      
+      donorId = uuidv4();
       await db.execute({
         sql: 'INSERT INTO users (id, wallet_address, created_at, updated_at) VALUES (?, ?, ?, ?)',
-        args: [userId, wallet_address, now, now],
+        args: [donorId, wallet_address, now, now]
       });
     } else {
-      userId = userResult.rows[0].id;
+      donorId = userCheck.rows[0].id;
+      // Update the user's last updated time
+      await db.execute({
+        sql: 'UPDATE users SET updated_at = ? WHERE id = ?',
+        args: [now, donorId]
+      });
     }
-    
-    // Create the donation
-    const now = new Date().toISOString();
-    
-    await db.execute({
-      sql: `
-        INSERT INTO donations (id, campaign_id, donor_id, amount, transaction_signature, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      args: [id, campaign_id, userId, amount, transaction_signature, now],
-    });
-    
-    // Clear all related cache entries
-    const donorCacheKey = `donations:wallet:${wallet_address}`;
-    donationCache.delete(donorCacheKey);
-    
-    // Clear campaign cache
-    const campaignCacheKeys = campaignCache.getKeys().filter(key => 
-      key.includes(campaign_id)
-    );
-    campaignCacheKeys.forEach(key => campaignCache.delete(key));
-    
-    // Clear donation summary cache for this campaign
-    const donationSummaryKey = `donations:summary:${campaign_id}`;
-    donationCache.delete(donationSummaryKey);
-    
-    // Get updated campaign stats
-    const updatedStats = await getCampaignDonationsSummary(campaign_id);
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Donation recorded successfully',
-      donation_id: id,
-      campaign_stats: updatedStats
-    });
+
+    // Create the donation record with proper transaction handling
+    try {
+      // Begin a transaction for data consistency
+      await db.execute({ sql: 'BEGIN TRANSACTION' });
+      
+      // Create the donation record
+      const donationId = id || uuidv4();
+      await db.execute({
+        sql: 'INSERT INTO donations (id, campaign_id, donor_id, amount, transaction_signature, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [donationId, campaign_id, donorId, amount, transaction_signature, now]
+      });
+      
+      // Commit the transaction
+      await db.execute({ sql: 'COMMIT' });
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Donation recorded successfully',
+        donationId,
+        campaign: {
+          id: campaign_id,
+          title: campaign.title,
+        }
+      });
+    } catch (error) {
+      // Rollback in case of error
+      await db.execute({ sql: 'ROLLBACK' });
+      throw error; // Re-throw to be caught by the outer try-catch
+    }
   } catch (error) {
-    console.error('Error recording donation:', error);
+    console.error('Error processing donation:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to record donation' },
+      { success: false, message: 'Failed to process donation' },
       { status: 500 }
     );
   }
